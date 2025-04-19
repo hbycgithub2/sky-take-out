@@ -61,4 +61,11 @@ public interface DishMapper {
      * 根据菜品id集合查询菜品数据
      */
     List<Dish> getByIds(List<Long> ids);
+
+    /**
+     * 根据主键修改菜品信息
+     * @param dish
+     */
+    @AutoFill(OperationType.UPDATE)
+    void update(Dish dish);
 }
