@@ -72,11 +72,21 @@ public class DishServiceImpl implements DishService {
     @Override
     @Transactional
     public void deleteBatch(List<Long> ids) {
-        ids.forEach(id->{
+
+
+      /*  ids.forEach(id->{
             Dish dish = dishMapper.getById(id);
             //判断当前要删除的菜品状态是否为起售中
             if(dish.getStatus() == StatusConstant.ENABLE){
                 //如果是起售中，抛出业务异常
+                throw new DeletionNotAllowedException(MessageConstant.DISH_ON_SALE);
+            }
+        });*/
+
+        List<Dish> dish = dishMapper.getByIds(ids);
+        dish.forEach(dish1 -> {
+            //如果是起售中，抛出业务异常
+            if (dish1.getStatus() == StatusConstant.ENABLE) {
                 throw new DeletionNotAllowedException(MessageConstant.DISH_ON_SALE);
             }
         });
@@ -88,12 +98,16 @@ public class DishServiceImpl implements DishService {
             throw new DeletionNotAllowedException(MessageConstant.DISH_BE_RELATED_BY_SETMEAL);
         }
 
-        //删除菜品表中的数据
+     /*   //删除菜品表中的数据
         ids.forEach(id -> {
             dishMapper.deleteById(id);
             //删除口味表中的数据
             dishFlavorMapper.deleteByDishId(id);
-        });
+        });*/
+        //删除菜品表中的数据
+        dishMapper.deleteByIds(ids);
+        //删除口味表中的数据
+        dishFlavorMapper.deleteByDishIds(ids);
     }
 
 
