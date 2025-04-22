@@ -45,6 +45,9 @@ public interface DishMapper {
     @Select("select * from dish where id = #{id}")
     Dish getById(Long id);
 
+    @Select("select * from dish where category_id = #{categoryId}")
+    List<Dish> getByType(Long categoryId);
+
     /**
      * 根据主键删除菜品数据
      * @param id

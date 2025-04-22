@@ -130,6 +130,13 @@ public class DishServiceImpl implements DishService {
         return dishVO;
     }
 
+    public List<Dish> getByTypeWithFlavor(Long categoryId) {
+        //查询菜品表
+        List<Dish> dish = dishMapper.getByType(categoryId);
+
+        return dish;
+    }
+
     @Override
     /**
      * 根据id修改菜品和关联的口味
