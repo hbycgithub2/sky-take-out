@@ -15,3 +15,6 @@ sky:
     access-key-secret: U6k1brOZ8gaOIXv3nXbulGTUzy6Pd7
 # 阿里云OSS的bucket-name
     bucket-name: sky-itcast
+  wechat:
+    appid: wx4360a655d0fbae7e
+    secret: 1116fe2a4666fc024d1a3d47afa8a371
