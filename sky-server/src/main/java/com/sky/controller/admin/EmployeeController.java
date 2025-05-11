@@ -1,10 +1,12 @@
 package com.sky.controller.admin;
 
+import com.sky.annotation.RequirePermission;
 import com.sky.constant.JwtClaimsConstant;
 import com.sky.dto.EmployeeDTO;
 import com.sky.dto.EmployeeLoginDTO;
 import com.sky.dto.EmployeePageQueryDTO;
 import com.sky.entity.Employee;
+import com.sky.enumPer.OperationPerm;
 import com.sky.properties.JwtProperties;
 import com.sky.result.PageResult;
 import com.sky.result.Result;
@@ -103,6 +105,7 @@ public class EmployeeController {
 
     @PostMapping("/status/{status}")
     @ApiOperation("启用禁用员工账号")
+    @RequirePermission(value = OperationPerm.OPERATION_PERMISSION)
     public Result<String> startOrStop(@PathVariable Integer status, Long id){
         log.info("启用禁用员工账号：{},{}",status,id);
         employeeService.startOrStop(status,id);
@@ -116,6 +119,7 @@ public class EmployeeController {
      */
     @GetMapping("/{id}")
     @ApiOperation("根据id查询员工")
+    @RequirePermission(value = OperationPerm.OPERATION_PERMISSION)
     public Result<Employee> getById(@PathVariable Long id){
         return Result.success(employeeService.getById(id));
     }
