@@ -75,8 +75,13 @@ public class WebMvcConfiguration extends WebMvcConfigurationSupport {
      * @param registry
      */
     protected void addResourceHandlers(ResourceHandlerRegistry registry) {
+        log.info("开始设置静态资源映射...");
         registry.addResourceHandler("/doc.html").addResourceLocations("classpath:/META-INF/resources/");
         registry.addResourceHandler("/webjars/**").addResourceLocations("classpath:/META-INF/resources/webjars/");
+        // 添加图片静态资源映射 - 使用绝对路径
+        String imagePath = System.getProperty("user.dir") + "/sky-server/src/main/images/";
+        log.info("图片资源路径：{}", imagePath);
+        registry.addResourceHandler("/images/**").addResourceLocations("file:" + imagePath);
     }
 
     /**

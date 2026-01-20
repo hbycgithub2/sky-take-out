@@ -53,28 +53,30 @@ public class CommonController {
     }*/
 
 
-//file校
+//file校验
         if (file.isEmpty()) {
-            return null;
-            // "图片上传失败";
+            return Result.error(MessageConstant.UPLOAD_FAILED);
         }
 //file重命名(a:1.png b:1.png)
-        String originalFilename = file.getOriginalFilename();//原米的图片名
+        String originalFilename = file.getOriginalFilename();//原始的图片名
         String ext = "." + originalFilename.split("\\.")[1];// 1.png
         String uuid = UUID.randomUUID().toString().replace("-", "");
         String fileName = uuid + ext;
 //上传图片
         ApplicationHome applicationHome = new ApplicationHome(this.getClass());
         String pre = applicationHome.getDir().getParentFile().getParentFile().getAbsolutePath() +
-                //"\\src\\main\\resources\\images\\";//
                 "\\src\\main\\images\\";
         String path = pre + fileName;
         try {
             file.transferTo(new File(path));
+            // 返回可访问的URL路径，而不是本地文件路径
+            String imageUrl = "/images/" + fileName;
+            log.info("图片上传成功，访问路径：{}", imageUrl);
+            return Result.success(imageUrl);
         } catch (Exception e) {
             e.printStackTrace();
-            return Result.success(path);
+            log.error("图片上传失败：{}", e.getMessage());
+            return Result.error(MessageConstant.UPLOAD_FAILED);
         }
-        return Result.success(path);
     }
 }
