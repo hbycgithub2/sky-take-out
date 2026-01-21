@@ -63,6 +63,15 @@ public class UserServiceImpl implements UserService {
      * @return
      */
     private String getOpenid(String code){
+        // ========== 开发环境：模拟登录 ==========
+        // 如果code以"test_"开头，则使用模拟登录（方便开发测试）
+        if (code != null && code.startsWith("test_")) {
+            String mockOpenid = "mock_openid_" + code.substring(5);
+            log.info("【模拟登录】使用模拟openid：{}", mockOpenid);
+            return mockOpenid;
+        }
+        
+        // ========== 生产环境：真实微信登录 ==========
         //请求参数封装
         Map map = new HashMap();
         map.put("appid",weChatProperties.getAppid());

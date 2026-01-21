@@ -25,4 +25,11 @@ public interface OrderService {
      */
     void paySuccess(String outTradeNo);
 
+    /**
+     * 查询订单详情
+     * @param id 订单ID
+     * @return 订单详情
+     */
+    OrderVO orderDetail(Long id);
+
 }

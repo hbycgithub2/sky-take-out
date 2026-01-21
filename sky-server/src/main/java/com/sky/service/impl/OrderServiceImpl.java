@@ -15,6 +15,9 @@ import com.sky.mapper.*;
 import com.sky.result.PageResult;
 import com.sky.service.OrderService;
 import com.sky.utils.WeChatPayUtil;
+import com.sky.utils.MockWeChatPayUtil;
+import com.sky.websocket.OrderWebSocket;
+import com.sky.websocket.AdminWebSocket;
 import com.sky.vo.OrderPaymentVO;
 import com.sky.vo.OrderStatisticsVO;
 import com.sky.vo.OrderSubmitVO;
@@ -31,6 +34,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
@@ -51,6 +55,8 @@ public class OrderServiceImpl implements OrderService {
     private AddressBookMapper addressBookMapper;
     @Autowired
     private WeChatPayUtil weChatPayUtil;
+    @Autowired
+    private MockWeChatPayUtil mockWeChatPayUtil;
 
     /**
      * 用户下单
@@ -87,6 +93,32 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(Orders.PENDING_PAYMENT);
         order.setPayStatus(Orders.UN_PAID);
         order.setOrderTime(LocalDateTime.now());
+        
+        // 如果前端没传预计送达时间，默认1小时后
+        if (order.getEstimatedDeliveryTime() == null) {
+            order.setEstimatedDeliveryTime(LocalDateTime.now().plusHours(1));
+        }
+        
+        // ========== 后端计算订单金额 ==========
+        // 如果前端没传金额或金额为null，从购物车计算
+        if (order.getAmount() == null) {
+            BigDecimal totalAmount = BigDecimal.ZERO;
+            
+            // 累加购物车中所有商品的金额
+            for (ShoppingCart cart : shoppingCartList) {
+                BigDecimal itemAmount = cart.getAmount().multiply(new BigDecimal(cart.getNumber()));
+                totalAmount = totalAmount.add(itemAmount);
+            }
+            
+            // 加上配送费（如果有）
+            if (ordersSubmitDTO.getPackAmount() != null && ordersSubmitDTO.getPackAmount() > 0) {
+                // 这里假设packAmount是配送费，根据实际业务调整
+                // totalAmount = totalAmount.add(new BigDecimal(ordersSubmitDTO.getPackAmount()));
+            }
+            
+            order.setAmount(totalAmount);
+            log.info("【订单提交】后端计算订单金额：{}", totalAmount);
+        }
 
         //向订单表插入1条数据
         orderMapper.insert(order);
@@ -128,13 +160,47 @@ public class OrderServiceImpl implements OrderService {
         Long userId = BaseContext.getCurrentId();
         User user = userMapper.getById(userId);
 
-        //调用微信支付接口，生成预支付交易单
-        JSONObject jsonObject = weChatPayUtil.pay(
-                ordersPaymentDTO.getOrderNumber(), //商户订单号
-                new BigDecimal(0.01), //支付金额，单位 元
-                "苍穹外卖订单", //商品描述
-                user.getOpenid() //微信用户的openid
-        );
+        // 判断是否使用模拟支付（开发环境使用模拟支付）
+        boolean useMockPayment = true; // 可以从配置文件读取
+        
+        JSONObject jsonObject;
+        
+        if (useMockPayment) {
+            // ========== 使用模拟支付 ==========
+            log.info("========== 【模拟支付模式】 ==========");
+            log.info("【模拟支付】订单号：{}", ordersPaymentDTO.getOrderNumber());
+            
+            // 调用模拟支付工具类
+            jsonObject = mockWeChatPayUtil.pay(
+                    ordersPaymentDTO.getOrderNumber(),
+                    new BigDecimal("0.01"),
+                    "苍穹外卖订单",
+                    user.getOpenid()
+            );
+            
+            // 模拟3秒后自动支付成功（异步执行）
+            String orderNumber = ordersPaymentDTO.getOrderNumber();
+            CompletableFuture.runAsync(() -> {
+                try {
+                    log.info("【模拟支付】等待3秒后自动触发支付成功...");
+                    Thread.sleep(3000);
+                    log.info("【模拟支付】3秒已到，触发支付成功回调");
+                    paySuccess(orderNumber);
+                } catch (Exception e) {
+                    log.error("【模拟支付】自动回调失败", e);
+                }
+            });
+            
+        } else {
+            // ========== 使用真实支付 ==========
+            log.info("========== 【真实支付模式】 ==========");
+            jsonObject = weChatPayUtil.pay(
+                    ordersPaymentDTO.getOrderNumber(),
+                    new BigDecimal(0.01),
+                    "苍穹外卖订单",
+                    user.getOpenid()
+            );
+        }
 
         if (jsonObject.getString("code") != null && jsonObject.getString("code").equals("ORDERPAID")) {
             throw new OrderBusinessException("该订单已支付");
@@ -152,9 +218,22 @@ public class OrderServiceImpl implements OrderService {
      * @param outTradeNo
      */
     public void paySuccess(String outTradeNo) {
+        log.info("========== 【支付成功回调】开始处理 ==========");
+        log.info("【支付成功】订单号：{}", outTradeNo);
 
         // 根据订单号查询订单
         Orders ordersDB = orderMapper.getByNumber(outTradeNo);
+        
+        if (ordersDB == null) {
+            log.error("【支付成功】订单不存在，订单号：{}", outTradeNo);
+            return;
+        }
+        
+        // 检查订单状态，防止重复处理
+        if (ordersDB.getPayStatus().equals(Orders.PAID)) {
+            log.warn("【支付成功】订单已支付，忽略重复回调，订单号：{}", outTradeNo);
+            return;
+        }
 
         // 根据订单id更新订单的状态、支付方式、支付状态、结账时间
         Orders orders = Orders.builder()
@@ -165,6 +244,58 @@ public class OrderServiceImpl implements OrderService {
                 .build();
 
         orderMapper.update(orders);
+        log.info("【支付成功】订单状态已更新，订单ID：{}，状态：待接单", ordersDB.getId());
+        
+        // ========== WebSocket推送 ==========
+        Long userId = ordersDB.getUserId();
+        
+        // 构造推送给用户的数据
+        Map<String, Object> orderData = new HashMap<>();
+        orderData.put("orderId", ordersDB.getId());
+        orderData.put("orderNumber", outTradeNo);
+        orderData.put("amount", ordersDB.getAmount());
+        orderData.put("payTime", LocalDateTime.now());
+        
+        // 推送支付成功消息给用户
+        OrderWebSocket.sendPaymentSuccess(userId, outTradeNo, orderData);
+        log.info("【支付成功】WebSocket推送给用户完成，用户ID：{}", userId);
+        
+        // 构造推送给商家的数据
+        Map<String, Object> merchantData = new HashMap<>();
+        merchantData.put("orderId", ordersDB.getId());
+        merchantData.put("orderNumber", outTradeNo);
+        merchantData.put("amount", ordersDB.getAmount());
+        merchantData.put("consignee", ordersDB.getConsignee());
+        merchantData.put("phone", ordersDB.getPhone());
+        merchantData.put("address", ordersDB.getAddress());
+        merchantData.put("orderTime", ordersDB.getOrderTime());
+        
+        // 推送来单提醒给商家
+        AdminWebSocket.sendNewOrder(merchantData);
+        log.info("【支付成功】WebSocket推送来单提醒给商家完成");
+        
+        log.info("========== 【支付成功回调】处理完成 ==========");
+    }
+
+    /**
+     * 查询订单详情
+     *
+     * @param id 订单ID
+     * @return 订单详情
+     */
+    public OrderVO orderDetail(Long id) {
+        // 根据id查询订单
+        Orders orders = orderMapper.getById(id);
+        
+        // 查询该订单对应的菜品/套餐明细
+        List<OrderDetail> orderDetailList = orderDetailMapper.getByOrderId(orders.getId());
+
+        // 将该订单及其详情封装到OrderVO并返回
+        OrderVO orderVO = new OrderVO();
+        BeanUtils.copyProperties(orders, orderVO);
+        orderVO.setOrderDetailList(orderDetailList);
+
+        return orderVO;
     }
 
 }
