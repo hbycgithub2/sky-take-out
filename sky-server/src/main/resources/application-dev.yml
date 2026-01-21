@@ -23,6 +23,10 @@ sky:
     privateKeyFilePath: D:\pay\apiclient_key.pem                 # 商户私钥文件路径
     apiV3Key: CZBK5I236435wxpay435434323EFDuv3                   # APIv3密钥
     weChatPayCertFilePath: D:\pay\wechatpay_166D96F876F45C7D07CE98952A96EC980368ACFC.pem  # 微信支付平台证书路径
-    notifyUrl: https://6619cf50.r6.cpolar.top/notify/paySuccess           # 支付成功回调地址
-    refundNotifyUrl: https://6619cf50.r6.cpolar.top/notify/refundSuccess  # 退款成功回调地址
-
+    notifyUrl: https://445b0da.r22.cpolar.top/notify/paySuccess           # 支付成功回调地址
+    refundNotifyUrl: https://445b0da.r22.cpolar.top/notify/refundSuccess  # 退款成功回调地址
+  payment:
+    mode: mock              # 支付模式：mock=模拟支付, real=真实支付
+    mock:
+      enabled: true         # 是否启用模拟支付
+      auto-delay: 3000      # 自动支付延迟（毫秒）
